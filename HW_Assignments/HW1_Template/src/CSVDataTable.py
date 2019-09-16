@@ -1,4 +1,3 @@
-
 from src.BaseDataTable import BaseDataTable
 import copy
 import csv
@@ -9,6 +8,7 @@ import pandas as pd
 
 pd.set_option("display.width", 256)
 pd.set_option('display.max_columns', 20)
+
 
 class CSVDataTable(BaseDataTable):
     """
@@ -32,10 +32,12 @@ class CSVDataTable(BaseDataTable):
             "key_columns": key_columns,
             "debug": debug
         }
+        self._fieldnames = None
 
         self._logger = logging.getLogger()
 
-        self._logger.debug("CSVDataTable.__init__: data = " + json.dumps(self._data, indent=2))
+        # self._logger.debug("CSVDataTable.__init__: data = " + json.dumps(self._data, indent=2))
+        # TODO commented, not used in test cases after t_load.
 
         if rows is not None:
             self._rows = copy.copy(rows)
@@ -55,13 +57,13 @@ class CSVDataTable(BaseDataTable):
             rows_to_print = self._rows[0:temp_r]
             keys = self._rows[0].keys()
 
-            for i in range(0,CSVDataTable._no_of_separators):
+            for i in range(0, CSVDataTable._no_of_separators):
                 tmp_row = {}
                 for k in keys:
                     tmp_row[k] = "***"
                 rows_to_print.append(tmp_row)
 
-            rows_to_print.extend(self._rows[int(-1*temp_r)-1:-1])
+            rows_to_print.extend(self._rows[int(-1 * temp_r) - 1:-1])
 
         df = pd.DataFrame(rows_to_print)
         result += "\nSome Rows: = \n" + str(df)
@@ -84,6 +86,8 @@ class CSVDataTable(BaseDataTable):
             for r in csv_d_rdr:
                 self._add_row(r)
 
+            self._fieldnames = csv_d_rdr.fieldnames
+
         self._logger.debug("CSVDataTable._load: Loaded " + str(len(self._rows)) + " rows")
 
     def save(self):
@@ -91,6 +95,35 @@ class CSVDataTable(BaseDataTable):
         Write the information back to a file.
         :return: None
         """
+
+        dir_info = self._data["connect_info"].get("directory")
+        file_n = self._data["connect_info"].get("file_name")
+        full_name = os.path.join(dir_info, file_n)
+
+        with open(full_name, "w") as txt_file:
+            # csv_d_wtr = csv.DictWriter(txt_file, self._fieldnames)
+            if len(self._rows) > 1:
+                pass
+                # TODO headers.
+            csv_d_wtr = csv.DictWriter(txt_file, self.get_fieldnames_list())
+            csv_d_wtr.writeheader()
+            csv_d_wtr.writerows(self._rows)
+            # TODO Blank lines among data when written in this way.
+
+        self._logger.debug("CSVDataTable.save: Saved")
+
+    def get_fieldnames_list(self):
+        if self._fieldnames is None:
+            if len(self._rows) > 0:
+                first_row_keys = self._rows[0].keys()
+                self._fieldnames = list(first_row_keys)
+        return self._fieldnames
+
+    def get_key_fields_list(self):
+        if self._data.get('key_columns') is None:
+            self._data['key_columns'] = self.get_fieldnames_list()[0:1]
+            # TODO more exactly, duplication should be detected?
+        return self._data.get('key_columns')
 
     @staticmethod
     def matches_template(row, template):
@@ -104,6 +137,10 @@ class CSVDataTable(BaseDataTable):
 
         return result
 
+    @staticmethod
+    def filter_fields(row: dict, fieldnames: list):
+        return {key: row.get(key) for key in fieldnames}
+
     def find_by_primary_key(self, key_fields, field_list=None):
         """
 
@@ -112,7 +149,10 @@ class CSVDataTable(BaseDataTable):
         :return: None, or a dictionary containing the requested fields for the record identified
             by the key.
         """
-        pass
+        key_columns = self.get_key_fields_list()
+        template_list = zip(self.get_key_fields_list(), field_list)
+        template_dict = dict(template_list)
+        return self.find_by_template(template_dict, field_list)
 
     def find_by_template(self, template, field_list=None, limit=None, offset=None, order_by=None):
         """
@@ -125,7 +165,7 @@ class CSVDataTable(BaseDataTable):
         :return: A list containing dictionaries. A dictionary is in the list representing each record
             that matches the template. The dictionary only contains the requested fields.
         """
-        pass
+        return [self.filter_fields(r, field_list) for r in self._rows if self.matches_template(r, template)]
 
     def delete_by_key(self, key_fields):
         """
@@ -172,4 +212,3 @@ class CSVDataTable(BaseDataTable):
 
     def get_rows(self):
         return self._rows
-
