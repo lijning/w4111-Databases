@@ -45,6 +45,8 @@ class CSVDataTable(BaseDataTable):
             self._rows = []
             self._load()
 
+        self._init_key_fields()
+
     def __str__(self):
 
         result = "CSVDataTable: config data = \n" + json.dumps(self._data, indent=2)
@@ -90,6 +92,13 @@ class CSVDataTable(BaseDataTable):
 
         self._logger.debug("CSVDataTable._load: Loaded " + str(len(self._rows)) + " rows")
 
+    def _init_key_fields(self):
+        if self._data.get('key_columns') is None:
+            self._data['key_columns'] = self.get_fieldnames_list()[0:1]
+        key_fields_val = [[kvp[col] for col in self._data['key_columns']] for kvp in self.get_rows()]
+        # if len(key_fields_val) > len(set(key_fields_val)) # You can't set() a list. It's unhashable.
+        # TODO more exactly, duplication should be detected?
+
     def save(self):
         """
         Write the information back to a file.
@@ -120,9 +129,7 @@ class CSVDataTable(BaseDataTable):
         return self._fieldnames
 
     def get_key_fields_list(self):
-        if self._data.get('key_columns') is None:
-            self._data['key_columns'] = self.get_fieldnames_list()[0:1]
-            # TODO more exactly, duplication should be detected?
+
         return self._data.get('key_columns')
 
     @staticmethod

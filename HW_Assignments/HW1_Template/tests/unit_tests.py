@@ -2,6 +2,7 @@
 # This file contains unit tests of individual methods.
 
 from src.CSVDataTable import CSVDataTable
+from src.RDBDataTable import RDBDataTable
 import logging
 import os
 
@@ -17,29 +18,36 @@ logger.setLevel(logging.DEBUG)
 data_dir = os.path.abspath("../Data/Baseball")
 
 
-def t_load():
+def test_load():
+
+    print("\n")
+    print("******************** " + "test_load" + " ********************")
     connect_info = {
         "directory": data_dir,
         "file_name": "People.csv"
     }
-
-    csv_tbl = CSVDataTable("people", connect_info, None)
-
+    csv_tbl = CSVDataTable("people", connect_info, None, debug=False)
     print("Created table = " + str(csv_tbl))
-
-
-def t_fields_meta():
-    connect_info = {
-        "directory": data_dir,
-        "file_name": "People.csv"
-    }
-
-    csv_tbl = CSVDataTable("people", connect_info, None)
-
     key_fields = csv_tbl.get_key_fields_list()
     print("Primary Keys:", key_fields)
     all_fields = csv_tbl.get_fieldnames_list()
     print("All Fields: ", all_fields)
+    print("******************** " + "end test_load" + " ********************")
+    return csv_tbl
+
+
+def test_connect():
+
+    print("\n")
+    print("******************** " + "test_load" + " ********************")
+    connect_info = dict(host="localhost", user="someone", password="link", database="lahman")
+    rdb_tbl = RDBDataTable("People", connect_info, ["playerID"])
+    key_fields = rdb_tbl.get_key_fields_list()
+    print("Primary Keys:", key_fields)
+    all_fields = rdb_tbl.get_fieldnames_list()
+    print("All Fields: ", all_fields)
+    print("******************** " + "end test_load" + " ********************")
+    return rdb_tbl
 
 
 def t_query_template():
@@ -48,7 +56,7 @@ def t_query_template():
         "file_name": "People.csv"
     }
 
-    csv_tbl = CSVDataTable("people", connect_info, None)
+    csv_tbl = CSVDataTable("people", connect_info, None, debug=False)
 
     template = {'playerID': 'aardsda01', 'birthYear': '1981', 'birthMonth': '12'}
     fields = ['retroID', 'bbrefID']
@@ -58,6 +66,20 @@ def t_query_template():
     assert result == correct_result
 
 
-t_load()
-t_fields_meta()
-t_query_template()
+def t_query_primary_key():
+    connect_info = {
+        "directory": data_dir,
+        "file_name": "People.csv"
+    }
+
+    csv_tbl = CSVDataTable("people", connect_info, None)
+
+    result = csv_tbl.find_by_primary_key(["aardd001"])
+
+    print(result)
+
+    # TODO correct ones.
+
+
+t1 = test_load()
+t2 = test_connect()
