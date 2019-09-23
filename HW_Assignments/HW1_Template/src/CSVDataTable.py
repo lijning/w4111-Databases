@@ -5,6 +5,7 @@ import logging
 import json
 import os
 import pandas as pd
+from copy import deepcopy
 
 pd.set_option("display.width", 256)
 pd.set_option('display.max_columns', 20)
@@ -232,14 +233,15 @@ class CSVDataTable(BaseDataTable):
         """
         if any(map(lambda key: key not in self.get_fieldnames_list(), new_values.keys())):
             raise ValueError("Invalid record, wrong field names.")
-        target_row = self.find_by_primary_key(key_fields)
-        updated = self.update_row(target_row, new_values)
+        original = self.find_by_primary_key(key_fields)
+        updated = self.update_row(original, new_values)
         pk_values = [updated[key] for key in self.get_key_fields_list()]
+        self.delete_by_key(key_fields)
         if self.find_by_primary_key(pk_values) is None:
-            self.delete_by_key(key_fields)
             self._add_row(updated)
         else:
-            raise DataTableError("Duplicated primary key after updates: {}".format(pk_values))
+            self._add_row(original)
+            raise DuplicatedPKeyError(pk_values)
 
     def update_by_template(self, template, new_values):
         """
@@ -253,19 +255,24 @@ class CSVDataTable(BaseDataTable):
         if any(map(lambda key: key not in self.get_fieldnames_list(), new_values.keys())):
             raise ValueError("Invalid record, wrong field names.")
         matched_rows = self.find_by_template(template)
-        updated_rows = [self.update_row(row, new_values) for row in matched_rows]
+        copied_rows = copy.deepcopy(matched_rows)
+        updated_rows = [self.update_row(row, new_values) for row in copied_rows]
+        num_updated = self.delete_by_template(template)
+        self._logger.debug("{} rows to be updated (pending).".format(num_updated))
+        is_valid = True
         for row in updated_rows:
             pk_values = [row[key] for key in self.get_key_fields_list()]
-            try:
-                self.find_by_primary_key(pk_values)
-            except DuplicatedPKeyError as err:
-                err.message = "Duplicated primary key after updates: {}".format(pk_values)
-                raise err
-        num = self.delete_by_template(template)
-        self._logger.debug("{} rows updated.".format(num))
-        for row in updated_rows:
-            self._add_row(row)
-        return num
+            if self.find_by_primary_key(pk_values) is not None:
+                is_valid = False
+                break
+        if is_valid:
+            for row in updated_rows:
+                self._add_row(row)
+                return num_updated
+        else:
+            for row in matched_rows:
+                self._add_row(row)
+                raise DuplicatedPKeyError
 
     def insert(self, new_record: dict):
         """

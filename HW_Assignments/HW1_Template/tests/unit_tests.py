@@ -180,6 +180,20 @@ def test_update_tpl(tbl: BaseDataTable):
     print("******************** " + "end test update" + " ********************")
 
 
+def test_update_pk(tbl: BaseDataTable):
+    print("\n")
+    print("******************** " + "test update pk" + " ********************")
+    tbl.insert({'playerID': "aardsda99", "birthYear": "1933", "deathYear": "2099"})
+    print("before update:")
+    print(tbl.find_by_template({"deathYear": "2099"}))
+    response = tbl.update_by_key(["aardsda99"], {"birthYear": "1655"})
+    print("%s rows affected." % response)
+    print("after  update:")
+    print(tbl.find_by_template({"deathYear": "2099"}))
+    assert 1 == tbl.delete_by_key(["aardsda99"])
+    print("******************** " + "end test update" + " ********************")
+
+
 def t2_multi_pk(tbl: BaseDataTable):
     print("\n")
     print("******************** " + "test multi pk" + " ********************")
@@ -265,6 +279,7 @@ test_insert_delete_pk(t_csv)
 test_insert_delete_pk(t_rdb)
 test_update_tpl(t_rdb)
 test_update_tpl(t_csv)
+test_update_pk(t_csv)
 
 t2_multi_pk(t2_rdb)
 t2_update_pk(t2_rdb)
