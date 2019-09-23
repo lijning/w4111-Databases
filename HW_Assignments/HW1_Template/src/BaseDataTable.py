@@ -105,3 +105,9 @@ class BaseDataTable(ABC):
         :return: The number of rows updates.
         """
         pass
+
+
+class DataTableError(BaseException):
+    def __init__(self, message, expression=None):
+        self.expression = expression
+        self.message = message

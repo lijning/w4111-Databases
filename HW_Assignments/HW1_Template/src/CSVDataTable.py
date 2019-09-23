@@ -1,4 +1,4 @@
-from src.BaseDataTable import BaseDataTable
+from src.BaseDataTable import BaseDataTable, DataTableError
 import copy
 import csv
 import logging
@@ -146,7 +146,19 @@ class CSVDataTable(BaseDataTable):
 
     @staticmethod
     def filter_fields(row: dict, fieldnames: list):
-        return {key: row.get(key) for key in fieldnames}
+        if fieldnames is None:
+            return row
+        else:
+            return {key: row.get(key) for key in fieldnames}
+
+    def template_from_key_fields(self, key_fields):
+        key_columns = self.get_key_fields_list()
+        if len(key_fields) != len(key_columns):
+            raise ValueError("%s key fields expected, but only %s passed in."
+                             % (len(key_columns), len(key_fields)))
+        template_list = zip(key_columns, key_fields)
+        template_dict = dict(template_list)
+        return template_dict
 
     def find_by_primary_key(self, key_fields, field_list=None):
         """
@@ -156,10 +168,14 @@ class CSVDataTable(BaseDataTable):
         :return: None, or a dictionary containing the requested fields for the record identified
             by the key.
         """
-        key_columns = self.get_key_fields_list()
-        template_list = zip(self.get_key_fields_list(), field_list)
-        template_dict = dict(template_list)
-        return self.find_by_template(template_dict, field_list)
+        template_dict = self.template_from_key_fields(key_fields)
+        result = self.find_by_template(template_dict, field_list)
+        if len(result) == 0:
+            return None
+        elif len(result) > 1:
+            raise DataTableError(json.dumps(result, indent=2))
+        else:
+            return result[0]
 
     def find_by_template(self, template, field_list=None, limit=None, offset=None, order_by=None):
         """
@@ -172,17 +188,19 @@ class CSVDataTable(BaseDataTable):
         :return: A list containing dictionaries. A dictionary is in the list representing each record
             that matches the template. The dictionary only contains the requested fields.
         """
-        return [self.filter_fields(r, field_list) for r in self._rows if self.matches_template(r, template)]
+        return [self.filter_fields(r, field_list)
+                for r in self.get_rows() if self.matches_template(r, template)]
 
     def delete_by_key(self, key_fields):
         """
 
         Deletes the record that matches the key.
 
-        :param template: A template.
+        :param key_fields: The list with the values for the key_columns, in order, to use to find a record.
         :return: A count of the rows deleted.
         """
-        pass
+        template_dict = self.template_from_key_fields(key_fields)
+        return self.delete_by_template(template_dict)
 
     def delete_by_template(self, template):
         """
@@ -190,7 +208,11 @@ class CSVDataTable(BaseDataTable):
         :param template: Template to determine rows to delete.
         :return: Number of rows deleted.
         """
-        pass
+        changed = [row for row in self.get_rows()
+                   if not self.matches_template(row, template)]
+        num_deleted = len(self.get_rows()) - len(changed)
+        self._rows = changed
+        return num_deleted
 
     def update_by_key(self, key_fields, new_values):
         """
@@ -209,13 +231,22 @@ class CSVDataTable(BaseDataTable):
         """
         pass
 
-    def insert(self, new_record):
+    def insert(self, new_record: dict):
         """
 
         :param new_record: A dictionary representing a row to add to the set of records.
         :return: None
         """
-        pass
+        if type(new_record) is not dict:
+            raise TypeError(new_record)
+        elif any(map(lambda key: key not in self.get_fieldnames_list(), new_record.keys())):
+            raise ValueError("Invalid record, wrong columns.")
+        else:
+            pk_values = [new_record[key] for key in self.get_key_fields_list()]
+            if self.find_by_primary_key(pk_values) is None:
+                self._add_row(new_record)
+            else:
+                raise DataTableError("Duplicate entry for primary key.")
 
     def get_rows(self):
         return self._rows
