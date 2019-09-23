@@ -53,14 +53,10 @@ def t2_connect():
     print("\n")
     print("******************** " + "test connect 2" + " ********************")
     connect_info = dict(host="localhost", user="someone", password="link", database="lahman")
-    try:
-        rdb_tbl = RDBDataTable("Appearances", connect_info, ["playerID"])
-    except DataTableError as err:
-        print("Error caught as expected: ", err)
-    else:
-        # raise AssertionError
-        print("Error not caught as expected.")
-        # WEIRD
+
+    rdb_tbl = RDBDataTable("Appearances", connect_info, ["playerID"])
+    if len(rdb_tbl.get_key_fields_list()) == 4:
+        print("Correct key columns, when given wrong ones.")
 
     rdb_tbl = RDBDataTable("Appearances", connect_info, ['yearID', 'teamID', 'lgID', 'playerID'])
     key_fields = rdb_tbl.get_key_fields_list()
@@ -140,7 +136,7 @@ def test_insert_duplicate(csv: CSVDataTable, rdb: RDBDataTable):
     print("******************** " + "end test insert" + " ********************")
 
 
-def test_insert_delete_template(tbl:BaseDataTable):
+def test_insert_delete_template(tbl: BaseDataTable):
     print("\n")
     print("******************** " + "test insert template" + " ********************")
     result = tbl.find_by_template({"birthYear": "1933"})
@@ -154,7 +150,7 @@ def test_insert_delete_template(tbl:BaseDataTable):
     print("******************** " + "end test insert" + " ********************")
 
 
-def test_insert_delete_pk(tbl:BaseDataTable):
+def test_insert_delete_pk(tbl: BaseDataTable):
     print("\n")
     print("******************** " + "test insert pk" + " ********************")
     sample_pk = ["aardsda99"]
@@ -169,7 +165,7 @@ def test_insert_delete_pk(tbl:BaseDataTable):
     print("******************** " + "end test insert" + " ********************")
 
 
-def test_update_tpl(tbl:BaseDataTable):
+def test_update_tpl(tbl: BaseDataTable):
     print("\n")
     print("******************** " + "test update tpl" + " ********************")
     tbl.insert({'playerID': "aardsda99", "birthYear": "1933", "deathYear": "2099"})
@@ -184,10 +180,78 @@ def test_update_tpl(tbl:BaseDataTable):
     print("******************** " + "end test update" + " ********************")
 
 
-t_csv = test_load()
-t2_rdb = t2_connect()
+def t2_multi_pk(tbl: BaseDataTable):
+    print("\n")
+    print("******************** " + "test multi pk" + " ********************")
+    new_values = [{"yearID": "1560", "teamID": "xxx", "lgID": "QQ", "playerID": "weitao99"},
+                  {"yearID": "1561", "teamID": "xxx", "lgID": "QQ", "playerID": "weitao99"},
+                  {"yearID": "1561", "teamID": "xxx", "lgID": "QQ", "playerID": "weitao98"},
+                  {"yearID": "1560", "teamID": "xxx", "lgID": "QQ", "playerID": "weitao99"}]
+    for val in new_values:
+        try:
+            tbl.insert(val)
+        except Exception as err:
+            print("Invalid insert, causing duplicate pk: ", err)
+        else:
+            print("inserted:", val.values())
 
+    result = tbl.find_by_template({"teamID": "xxx"})
+    print("Num. of records in team 'xxx': ", len(result))
+    try:
+        tbl.update_by_template({"playerID": "weitao98"}, {"playerID": "weitao99"})
+    except Exception as err:
+        print("Invalid update, causing duplicate pk: ", err)
+    else:
+        print("updated:", val.values())
+
+    resp = tbl.delete_by_template({"teamID": "xxx"})
+    print("Num. of rows deleted: ", resp)
+    print("******************** " + "end  multi pk" + " ********************")
+
+
+def t2_update_pk(tbl: BaseDataTable):
+    print("\n")
+    print("******************** " + "test update pk" + " ********************")
+    new_values = [{"yearID": "1561", "teamID": "xxx", "lgID": "QQ", "playerID": "weitao99"},
+                  {"yearID": "1561", "teamID": "xxx", "lgID": "QQ", "playerID": "weitao98"},
+                  {"yearID": "1560", "teamID": "xxx", "lgID": "QQ", "playerID": "weitao99"}]
+
+    for val in new_values:
+        try:
+            tbl.insert(val)
+        except Exception as err:
+            print("Invalid insert, causing duplicate pk: ", err)
+        else:
+            print("inserted:", val.values())
+
+    result1 = tbl.find_by_template({"teamID": "xxx"},
+                                   ['yearID', 'teamID', 'lgID', 'playerID', 'G_all'])
+    tbl.update_by_key(['1561', 'xxx', 'QQ', 'weitao98'], {"lgID": "TT"})
+    result2 = tbl.find_by_template({"teamID": "xxx"},
+                                   ['yearID', 'teamID', 'lgID', 'playerID', 'G_all'])
+    print("Records in team 'xxx' after update: ", result2)
+    assert result1 != result2
+
+    try:
+        tbl.update_by_key(['1560', 'xxx', 'QQ', 'weitao99'], {"yearID": "1561"})
+        result3 = tbl.find_by_template({"teamID": "xxx"},
+                                       ['yearID', 'teamID', 'lgID', 'playerID', 'G_all'])
+        print("result 3:", result3)
+    except Exception as err:
+        print("Invalid update, causing duplicate pk: ", err)
+    else:
+        print("updated:", val.values())
+
+    resp = tbl.delete_by_key(['1561', 'xxx', 'TT', 'weitao98'])
+    print("Num. of rows deleted (by key): ", resp)
+    resp = tbl.delete_by_template({"teamID": "xxx"})
+    print("Num. of rows deleted (by tpl): ", resp)
+    print("******************** " + "end  update pk" + " ********************")
+
+
+t_csv = test_load()
 t_rdb = test_connect()
+t2_rdb = t2_connect()
 
 test_insert_delete_template(t_csv)
 test_helper(t_csv, t_rdb)
@@ -200,4 +264,7 @@ test_insert_delete_template(t_rdb)
 test_insert_delete_pk(t_csv)
 test_insert_delete_pk(t_rdb)
 test_update_tpl(t_rdb)
+test_update_tpl(t_csv)
 
+t2_multi_pk(t2_rdb)
+t2_update_pk(t2_rdb)

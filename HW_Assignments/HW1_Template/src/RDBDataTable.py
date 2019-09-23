@@ -78,7 +78,7 @@ class RDBDataTable(BaseDataTable):
 
         self._col_info = {col_info["Field"]: col_info for col_info in tbl_description}
 
-        self._logger.debug("describe table:\n" + json.dumps(tbl_description, indent=2))
+        # self._logger.debug("describe table:\n" + json.dumps(tbl_description, indent=2))
 
         # Get the list of key columns for this table.
         if key_columns is None or len(key_columns) == 0:
@@ -183,6 +183,13 @@ class RDBDataTable(BaseDataTable):
         :param new_values: A dict of field:value to set for updated row.
         :return: Number of rows updated.
         """
+        if len(self._key_columns) != len(key_fields):
+            raise DataTableError("This table has %s key columns but %s values are passed in." % (
+                len(self._key_columns), len(key_fields)
+            ))
+        else:
+            template = dict(zip(self._key_columns, key_fields))
+            return self.update_by_template(template, new_values)
 
     def update_by_template(self, template, new_values):
         """
@@ -196,6 +203,7 @@ class RDBDataTable(BaseDataTable):
                                                table_name=self._table_name)
         self._logger.debug(cur.mogrify(sql, args))
         response = cur.execute(sql, args)
+        self._logger.debug("%s rows were updated." % response)
         self._connection.commit()
         cur.close()
         return response

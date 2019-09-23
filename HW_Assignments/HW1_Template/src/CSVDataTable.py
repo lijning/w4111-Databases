@@ -1,4 +1,4 @@
-from src.BaseDataTable import BaseDataTable, DataTableError
+from src.BaseDataTable import BaseDataTable, DataTableError, DuplicatedPKeyError
 import copy
 import csv
 import logging
@@ -151,6 +151,15 @@ class CSVDataTable(BaseDataTable):
         else:
             return {key: row.get(key) for key in fieldnames}
 
+    @staticmethod
+    def update_row(row: dict, new_values: dict):
+        for k, v in new_values.items():
+            if k in row.keys():
+                row[k] = v
+            else:
+                raise DataTableError("columns %s not found in table." % k)
+        return row
+
     def template_from_key_fields(self, key_fields):
         key_columns = self.get_key_fields_list()
         if len(key_fields) != len(key_columns):
@@ -173,7 +182,7 @@ class CSVDataTable(BaseDataTable):
         if len(result) == 0:
             return None
         elif len(result) > 1:
-            raise DataTableError(json.dumps(result, indent=2))
+            raise DuplicatedPKeyError
         else:
             return result[0]
 
@@ -221,15 +230,42 @@ class CSVDataTable(BaseDataTable):
         :param new_values: A dict of field:value to set for updated row.
         :return: Number of rows updated.
         """
+        if any(map(lambda key: key not in self.get_fieldnames_list(), new_values.keys())):
+            raise ValueError("Invalid record, wrong field names.")
+        target_row = self.find_by_primary_key(key_fields)
+        updated = self.update_row(target_row, new_values)
+        pk_values = [updated[key] for key in self.get_key_fields_list()]
+        if self.find_by_primary_key(pk_values) is None:
+            self.delete_by_key(key_fields)
+            self._add_row(updated)
+        else:
+            raise DataTableError("Duplicated primary key after updates: {}".format(pk_values))
 
     def update_by_template(self, template, new_values):
         """
 
         :param template: Template for rows to match.
-        :param new_values: New values to set for matching fields.
+        :param new_values: New values to set for matching fields. A dictionary containing fields and the values to set
+            for the corresponding fields in the records. This returns an error if the update would create a
+            duplicate primary key. NO ROWS are updated on this error.
         :return: Number of rows updated.
         """
-        pass
+        if any(map(lambda key: key not in self.get_fieldnames_list(), new_values.keys())):
+            raise ValueError("Invalid record, wrong field names.")
+        matched_rows = self.find_by_template(template)
+        updated_rows = [self.update_row(row, new_values) for row in matched_rows]
+        for row in updated_rows:
+            pk_values = [row[key] for key in self.get_key_fields_list()]
+            try:
+                self.find_by_primary_key(pk_values)
+            except DuplicatedPKeyError as err:
+                err.message = "Duplicated primary key after updates: {}".format(pk_values)
+                raise err
+        num = self.delete_by_template(template)
+        self._logger.debug("{} rows updated.".format(num))
+        for row in updated_rows:
+            self._add_row(row)
+        return num
 
     def insert(self, new_record: dict):
         """
